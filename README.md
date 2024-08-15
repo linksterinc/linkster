@@ -1,69 +1,148 @@
 # linkster
-This code was copied from https://github.com/fazt/nodejs-mysql-links -- I've renamed it to "linkster" to make the names of things shorter.
+This code was forked and adapted from https://github.com/fazt/nodejs-mysql-links -- I've renamed it to "linkster" to make the names of things shorter.
 
+# installing on a VM w/ separate database
+_this installation method is intended for Cloud platforms; install the application on a stock VM and connect to either a database server on another VM, or use a DBaaS service_
 
+_inspired by [this tutorial](https://www.sammeechward.com/deploying-full-stack-js-to-aws-ec2)_
 
-# Notes App with Nodejs and Mysql
+## App server
+Prerequisite: VM running Ubuntu or Debian
 
-Notes App is a Multi Page Application using Nodejs and Mysql. The purpose of this web application is just to be an example for beginners.
+### install prereqs
+```sh
+sudo apt update
+sudo apt upgrade
 
-![](docs/screenshot2.png)
-![](docs/screenshot.png)
-
-### Installation with Docker (Recommended)
-
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
-git clone https://github.com/FaztTech/nodejs-mysql-links
-cd nodejs-mysql-links
-docker-compose up
+
+### upload code
+_Use whatever method is easiest for the service; e.g. if working in a Cloud Shell environment, there may be an "upload file" function_
+
+Copy the contents of this folder (except for `node_modules` and `.git`) to ~/app on the app server.
+
+Example:
+```sh
+rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.env' \
+-e "ssh -i ~/cpet/azure-keys/linkster-2024-08-15_key.pem" \
+. linkster@172.200.185.120:~/app
 ```
 
-Now you can visit http://localhost:4000
-
-### Manual Installation
-
-```
-mysql -u MYUSR "-pMYPASSWORD" < ./database/db.sql # create database
+Install node deps:
+```sh
+cd ~/app
 npm i
-npm run build # this step is actually not supported!
-npm start
 ```
 
-### Server config
+### configure app server as system daemon
 
-* Install Node, MySQL
-* `mysql -u MYUSR "-pMYPASSWORD" < ./database/db.sql # create database`
-* `npm i`
-* install and configure pm2
-  * https://www.digitalocean.com/community/tutorials/how-to-set-up-a-node-js-application-for-production-on-debian-9
+```sh
+sudo vim /etc/app.env
+```
 
+In Vim, add your variables in the format VARIABLE=value. For example:
 
-## File Structure
+`DB_PASSWORD=your_secure_password`
 
-- database, it the folder with all the sql queries, you can use to recreate the database for this application
-- src, it's all the code for the Backend and Frontend Application
-- docs
+```sh
+sudo chmod 600 /etc/app.env
+sudo chown ubuntu:ubuntu /etc/app.env
+```
 
-## Environment Variables
+```sh
+sudo vim /etc/systemd/system/linkster.service
+```
+...paste this config:
 
-- PORT
+```toml
+[Unit]
+Description=Node.js App
+After=network.target multi-user.target
 
-## Old Versions of this Project
+[Service]
+User=linkster
+WorkingDirectory=/home/linkster/app
+ExecStart=/usr/bin/npm start
+Restart=always
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/app.env
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=linkster
 
-- [version-2018](https://github.com/FaztTech/nodejs-mysql-links/tree/version-2018)
+[Install]
+WantedBy=multi-user.target
+```
 
-## Todo
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable linkster.service
+sudo systemctl start linkster.service
+```
 
-1. [ ] Add docker compose production build
-1. [ ] Add nodemailer for transactional emails
+#### Verify that the service is running properly.
+```sh
+sudo systemctl status linkster.service
+```
 
-## Tools
+view logs:
+```sh
+sudo journalctl -u linkster.service
+```
 
-- Nodejs
-- Mysql
-- Babel
-- Docker
+tail logs:
+```sh
+sudo journalctl -fu linkster.service
+```
 
-# Resources
+request the site and confirm that you get an html response:
+```sh
+curl localhost:8080
+```
 
-- https://stackoverflow.com/questions/50093144/mysql-8-0-client-does-not-support-authentication-protocol-requested-by-server
+### configure reverse proxy with [Caddy](https://caddyserver.com/docs/install)
+```
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+sudo vim /etc/caddy/Caddyfile
+```
+
+Replace Caddyfile contents with
+```json
+:80 {
+    reverse_proxy localhost:8080
+}
+```
+
+```sh
+sudo systemctl restart caddy
+```
+
+#### Verify that Caddy proxy is working
+Navigate to http://<instance_public_ip> (assuming port 80 is open on firewall)
+
+### configure TLS with Caddy
+(Make a DNS A record pointing to your IP)
+
+```sh
+sudo vim /etc/caddy/Caddyfile
+```
+
+replace `:80` with your domain name:
+
+```json
+mydomain.com {
+    reverse_proxy localhost:3000
+}
+```
+
+```sh
+sudo systemctl restart caddy
+```
+
+...it should be working! visit `https://<your_domain_name>` to confirm

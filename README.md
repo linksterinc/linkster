@@ -44,7 +44,9 @@ sudo vim /etc/app.env
 
 In Vim, add your variables in the format VARIABLE=value. For example:
 
-`DB_PASSWORD=your_secure_password`
+`DATABASE_PASSWORD=your_secure_password`
+
+_note: you might not know this
 
 ```sh
 sudo chmod 600 /etc/app.env

@@ -21,8 +21,9 @@ CREATE TABLE users (
 
 DESCRIBE users;
 
+-- default user has password 'linkster' (SHA2 encrypted)
 INSERT INTO users (id, email, password, fullname) 
-  VALUES (1, 'linksterinc@gmail.com', 'linkster', 'Marcia Linkster');
+  VALUES (1, 'linksterinc@gmail.com', '$2a$10$OudBkRZTTuRly/rXkc3eVe6B4GKp/WmvS93ihcNolLpezQPs3AYfa', 'Marcia Linkster');
 
 SELECT * FROM users;
 
@@ -55,4 +56,11 @@ INSERT INTO links (
     1
 );
 
-DESCRIBE links;
+-- for express-mysql-session
+
+CREATE TABLE IF NOT EXISTS `sessions` (
+  `session_id` varchar(128) COLLATE utf8mb4_bin NOT NULL,
+  `expires` int(11) unsigned NOT NULL,
+  `data` mediumtext COLLATE utf8mb4_bin,
+  PRIMARY KEY (`session_id`)
+) ENGINE=InnoDB;
